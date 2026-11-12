@@ -8,7 +8,7 @@ AgentGate 是《信息安全工程实践》课程项目，目标是在智能体�
 
 截至 2026 年 11 月 12 日，安全核心的第一版已经可以运行并通过自动化测试。当前实现包括请求规范化、五角色策略、ALLOW/DENY/REQUIRE_APPROVAL 三态决策、三类本地模拟工具、SQLite 审批与审计、审批摘要绑定、单次凭证、篡改与重放阻断，以及审计不可用时的 fail closed。
 
-当前测试基线为 18 个测试全部通过，总体语句覆盖率 87%。FastAPI 已提供请求提交、审批、批准后执行和审计链查询接口，并通过真实 Uvicorn 健康检查。这些结果只证明当前测试集覆盖的行为，不代表生产级安全结论；轻量展示页面、批量安全测试集与指标报告仍待完成。
+当前测试基线为 70 个测试全部通过，总体语句覆盖率 90%。其中包含 52 条结构化安全用例；当前本地评估得到决策与原因码一致率 100%、受保护用例控制率 100%、基本审计字段完整率 100%、误放行率 0%，网关 P95 延迟 25.975 ms。FastAPI 已提供请求提交、审批、批准后执行和审计链查询接口，并通过真实 Uvicorn 健康检查。这些结果只描述当前合成用例和本机单次运行，不代表生产级安全结论；轻量展示页面和自然语言端到端场景仍待完成。
 
 ## 推荐实现范围
 
@@ -29,6 +29,7 @@ AgentGate 是《信息安全工程实践》课程项目，目标是在智能体�
 - [证据边界与待确认决策](docs/BASELINE_AND_DECISIONS.md)
 - [原始材料管理约定](references/README.md)
 - [实现状态](docs/IMPLEMENTATION_STATUS.md)
+- [当前安全评估报告](docs/EVALUATION_REPORT.md)
 
 ## 安全边界
 
@@ -41,6 +42,7 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev,api]"
 .\.venv\Scripts\python.exe -m pytest --cov=agentgate --cov-report=term-missing
 .\.venv\Scripts\python.exe scripts\run_demo.py
+.\.venv\Scripts\python.exe scripts\run_security_evaluation.py
 .\.venv\Scripts\python.exe -m uvicorn agentgate.server:app --host 127.0.0.1 --port 8010
 ```
 
