@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic import Field
 
 from agentgate.application import AgentGateApplication
 from agentgate.errors import ApprovalError
 from agentgate.models import (
     ApprovalGrant,
+    ApprovalRecord,
+    ApprovalStatus,
     AuditEvent,
     GatewayResponse,
     Role,
@@ -26,13 +30,20 @@ class ApprovedExecutionInput(StrictModel):
 
 
 def create_api(application: AgentGateApplication):
-    from fastapi import FastAPI, HTTPException
+    from fastapi import FastAPI, HTTPException, Query
+    from fastapi.responses import FileResponse
+    from fastapi.staticfiles import StaticFiles
 
     api = FastAPI(
         title="AgentGate API",
         version="0.1.0",
         description="Local-only API for deterministic agent tool-call authorization and audit.",
     )
+    web_root = Path(__file__).resolve().parent / "web"
+
+    @api.get("/", include_in_schema=False)
+    async def dashboard() -> FileResponse:
+        return FileResponse(web_root / "index.html")
 
     @api.get("/health")
     async def health() -> dict[str, str]:
@@ -54,6 +65,23 @@ def create_api(application: AgentGateApplication):
         except ApprovalError as exc:
             raise HTTPException(
                 status_code=409,
+                detail={"reason_code": exc.reason_code.value, "message": exc.message},
+            ) from exc
+
+    @api.get("/v1/approvals", response_model=list[ApprovalRecord])
+    async def approvals(
+        status: ApprovalStatus | None = None,
+        limit: int = Query(default=100, ge=1, le=500),
+    ) -> list[ApprovalRecord]:
+        return application.approvals.list(status=status, limit=limit)
+
+    @api.get("/v1/approvals/{approval_id}", response_model=ApprovalRecord)
+    async def approval(approval_id: str) -> ApprovalRecord:
+        try:
+            return application.approvals.get(approval_id)
+        except ApprovalError as exc:
+            raise HTTPException(
+                status_code=404,
                 detail={"reason_code": exc.reason_code.value, "message": exc.message},
             ) from exc
 
@@ -79,6 +107,14 @@ def create_api(application: AgentGateApplication):
     @api.get("/v1/traces/{trace_id}", response_model=list[AuditEvent])
     async def trace(trace_id: str) -> list[AuditEvent]:
         return application.gateway.trace(trace_id)
+
+    @api.get("/v1/audit/recent", response_model=list[AuditEvent])
+    async def recent_audit(
+        limit: int = Query(default=100, ge=1, le=500),
+    ) -> list[AuditEvent]:
+        return application.audit.list_recent(limit=limit)
+
+    api.mount("/static", StaticFiles(directory=web_root), name="static")
 
     return api
 

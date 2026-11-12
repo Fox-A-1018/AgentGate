@@ -102,6 +102,15 @@ class AuditRepository:
             ).fetchall()
         return [self._row_to_event(row) for row in rows]
 
+    def list_recent(self, limit: int = 100) -> list[AuditEvent]:
+        safe_limit = max(1, min(limit, 500))
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM audit_events ORDER BY sequence DESC LIMIT ?",
+                (safe_limit,),
+            ).fetchall()
+        return [self._row_to_event(row) for row in rows]
+
     @staticmethod
     def _row_to_event(row: sqlite3.Row) -> AuditEvent:
         return AuditEvent.model_validate(

@@ -25,6 +25,9 @@ api = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+agentgate = ["web/*.html", "web/*.css", "web/*.js"]
+
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"
 testpaths = ["tests"]

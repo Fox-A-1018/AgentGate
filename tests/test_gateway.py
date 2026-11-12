@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 
 import pytest
 
-from agentgate.errors import ApprovalError
+from agentgate.errors import ApprovalError, IdempotencyError
 from agentgate.models import (
     AuditEventType,
     Decision,
@@ -364,4 +365,183 @@ def test_trace_contains_ordered_security_events(app):
         AuditEventType.EXECUTION_STARTED,
         AuditEventType.EXECUTION_SUCCEEDED,
     ]
+
+
+def test_pending_approval_expiry_is_enforced(app):
+    app.approvals.pending_ttl = timedelta(seconds=-1)
+    request = ToolCallRequest(
+        subject_id="operator-1",
+        role=Role.OPERATOR,
+        tool_name="mail.send",
+        parameters={
+            "recipients": ["reviewer@example.test"],
+            "subject": "Demo",
+            "body": "Synthetic content only.",
+        },
+    )
+    pending = app.gateway.submit(request)
+
+    with pytest.raises(ApprovalError) as exc_info:
+        app.gateway.grant_approval(
+            pending.approval_id,
+            approver_id="approver-1",
+            approver_role=Role.APPROVER,
+        )
+
+    assert exc_info.value.reason_code is ReasonCode.APPROVAL_EXPIRED
+    assert app.registry.execution_counts["mail.send"] == 0
+
+
+def test_approved_grant_expiry_is_enforced(app):
+    app.approvals.grant_ttl = timedelta(seconds=-1)
+    request = ToolCallRequest(
+        subject_id="operator-1",
+        role=Role.OPERATOR,
+        tool_name="mail.send",
+        parameters={
+            "recipients": ["reviewer@example.test"],
+            "subject": "Demo",
+            "body": "Synthetic content only.",
+        },
+    )
+    pending = app.gateway.submit(request)
+    grant = app.gateway.grant_approval(
+        pending.approval_id,
+        approver_id="approver-1",
+        approver_role=Role.APPROVER,
+    )
+
+    response = app.gateway.execute_approved(request, grant.approval_id, grant.token)
+
+    assert response.decision is Decision.DENY
+    assert response.reason_code is ReasonCode.APPROVAL_EXPIRED
+    assert app.registry.execution_counts["mail.send"] == 0
+
+
+def test_tool_failure_is_reported_without_crashing_gateway(app):
+    request = ToolCallRequest(
+        subject_id="viewer-1",
+        role=Role.VIEWER,
+        tool_name="file.read",
+        parameters={"path": "public/missing.txt"},
+    )
+
+    response = app.gateway.submit(request)
+
+    assert response.decision is Decision.ALLOW
+    assert response.reason_code is ReasonCode.EXECUTION_FAILED
+    assert response.execution is not None
+    assert response.execution.status is ExecutionStatus.FAILED
+
+
+def test_idempotent_direct_request_replays_result_without_second_execution(app):
+    first_request = ToolCallRequest(
+        subject_id="viewer-idempotent",
+        role=Role.VIEWER,
+        tool_name="file.read",
+        parameters={"path": "public/welcome.txt"},
+        idempotency_key="read-welcome-once",
+    )
+    second_request = ToolCallRequest(
+        subject_id="viewer-idempotent",
+        role=Role.VIEWER,
+        tool_name="file.read",
+        parameters={"path": "public/welcome.txt"},
+        idempotency_key="read-welcome-once",
+    )
+
+    first = app.gateway.submit(first_request)
+    second = app.gateway.submit(second_request)
+
+    assert first.decision is Decision.ALLOW
+    assert second == first
+    assert app.registry.execution_counts["file.read"] == 1
+    assert [event.event_type for event in app.gateway.trace(second_request.trace_id)] == [
+        AuditEventType.REQUEST_RECEIVED,
+        AuditEventType.IDEMPOTENCY_REPLAYED,
+    ]
+
+
+def test_idempotency_key_cannot_be_reused_for_different_parameters(app):
+    first = ToolCallRequest(
+        subject_id="viewer-idempotent",
+        role=Role.VIEWER,
+        tool_name="file.read",
+        parameters={"path": "public/welcome.txt"},
+        idempotency_key="fixed-business-operation",
+    )
+    conflicting = ToolCallRequest(
+        subject_id="viewer-idempotent",
+        role=Role.VIEWER,
+        tool_name="file.read",
+        parameters={"path": "private/secret.txt"},
+        idempotency_key="fixed-business-operation",
+    )
+    app.gateway.submit(first)
+
+    response = app.gateway.submit(conflicting)
+
+    assert response.decision is Decision.DENY
+    assert response.reason_code is ReasonCode.IDEMPOTENCY_CONFLICT
+    assert app.registry.execution_counts["file.read"] == 1
+
+
+def test_idempotent_approval_request_reuses_same_pending_approval(app):
+    request_data = {
+        "subject_id": "operator-idempotent",
+        "role": Role.OPERATOR,
+        "tool_name": "mail.send",
+        "parameters": {
+            "recipients": ["reviewer@example.test"],
+            "subject": "Demo",
+            "body": "Synthetic content only.",
+        },
+        "idempotency_key": "mail-operation-1",
+    }
+
+    first = app.gateway.submit(ToolCallRequest(**request_data))
+    second = app.gateway.submit(ToolCallRequest(**request_data))
+
+    assert first.decision is Decision.REQUIRE_APPROVAL
+    assert second.approval_id == first.approval_id
+    assert len(app.approvals.list()) == 1
+    assert app.registry.execution_counts["mail.send"] == 0
+
+
+def test_idempotency_store_blocks_equivalent_concurrent_reservation(app):
+    request = ToolCallRequest(
+        subject_id="viewer-idempotent",
+        role=Role.VIEWER,
+        tool_name="file.read",
+        parameters={"path": "public/welcome.txt"},
+        idempotency_key="concurrent-operation",
+    )
+    call = app.gateway.normalizers.normalize(request, app.gateway.policy.version)
+    app.idempotency.begin(call)
+
+    with pytest.raises(IdempotencyError) as exc_info:
+        app.idempotency.begin(call)
+
+    assert exc_info.value.reason_code is ReasonCode.IDEMPOTENCY_IN_PROGRESS
+
+
+def test_idempotency_store_failure_blocks_request_before_execution(app, monkeypatch):
+    request = ToolCallRequest(
+        subject_id="viewer-idempotent",
+        role=Role.VIEWER,
+        tool_name="file.read",
+        parameters={"path": "public/welcome.txt"},
+        idempotency_key="requires-store",
+    )
+
+    def fail(_call):
+        raise OSError("synthetic idempotency failure")
+
+    monkeypatch.setattr(app.idempotency, "begin", fail)
+
+    response = app.gateway.submit(request)
+
+    assert response.decision is Decision.DENY
+    assert response.reason_code is ReasonCode.IDEMPOTENCY_UNAVAILABLE
+    assert app.registry.execution_counts["file.read"] == 0
 

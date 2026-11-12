@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from agentgate.approval import ApprovalService
 from agentgate.gateway import AgentGateGateway
+from agentgate.idempotency import IdempotencyService
 from agentgate.models import Decision, ReasonCode, Role, ToolCallRequest
 from agentgate.normalizers import NormalizerRegistry
 from agentgate.policy import PolicyEngine
@@ -31,6 +32,7 @@ def test_audit_failure_blocks_tool_execution(tmp_path):
         registry=registry,
         audit=FailingAuditRepository(),
         approvals=ApprovalService(tmp_path / "state.sqlite3"),
+        idempotency=IdempotencyService(tmp_path / "state.sqlite3"),
     )
     request = ToolCallRequest(
         subject_id="viewer-1",

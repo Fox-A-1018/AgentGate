@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="AgentGate 智能体工具调用安全控制与审计系统演示台" />
+    <title>AgentGate · 安全控制台</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">跳到主要内容</a>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="/" aria-label="AgentGate 首页">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 36" role="img">
+              <path d="M16 1 29 6v10c0 8.7-5.3 15.4-13 19C8.3 31.4 3 24.7 3 16V6L16 1Z" />
+              <path d="m10.2 18 3.7 3.7 8-8" />
+            </svg>
+          </span>
+          <span><strong>AgentGate</strong><small>智能体安全控制台</small></span>
+        </a>
+        <div class="service-state" id="service-state" aria-live="polite">
+          <span class="state-dot"></span><span>正在连接服务</span>
+        </div>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <section class="hero shell" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">安全策略 · 人工审批 · 全程审计</p>
+          <h1 id="hero-title">让 AI 提出操作，<br /><span>让策略决定执行。</span></h1>
+          <p class="hero-description">
+            AgentGate 位于智能体与外部工具之间。每次调用都必须经过格式规范化、权限检查、风险判定，
+            必要时等待人工审批，最后形成可追溯的审计记录。
+          </p>
+        </div>
+        <div class="trust-flow" aria-label="AgentGate 处理流程">
+          <div class="flow-node"><span>01</span><strong>候选请求</strong><small>AI 只能提出操作</small></div>
+          <div class="flow-line" aria-hidden="true"></div>
+          <div class="flow-node active"><span>02</span><strong>策略网关</strong><small>权限与参数检查</small></div>
+          <div class="flow-line" aria-hidden="true"></div>
+          <div class="flow-node"><span>03</span><strong>受控执行</strong><small>全程写入审计</small></div>
+        </div>
+      </section>
+
+      <section class="status-strip shell" aria-label="系统状态概览">
+        <article class="metric-card"><span class="metric-icon metric-icon-blue">●</span><div><small>网关状态</small><strong id="metric-health">检查中</strong></div></article>
+        <article class="metric-card"><span class="metric-icon metric-icon-violet">#</span><div><small>策略版本</small><strong id="metric-policy">—</strong></div></article>
+        <article class="metric-card"><span class="metric-icon metric-icon-amber">!</span><div><small>待审批</small><strong id="metric-pending">0</strong></div></article>
+        <article class="metric-card"><span class="metric-icon metric-icon-green">✓</span><div><small>最近审计事件</small><strong id="metric-events">0</strong></div></article>
+      </section>
+
+      <section class="workspace shell" aria-label="请求验证工作台">
+        <article class="panel request-panel">
+          <div class="panel-heading">
+            <div><p class="section-kicker">REQUEST LAB</p><h2>构造一次工具调用</h2></div>
+            <span class="demo-badge">本地模拟</span>
+          </div>
+          <div class="scenario-picker" aria-label="预设演示场景">
+            <button class="scenario active" type="button" data-scenario="public-file"><span>正常放行</span><small>读取公开文件</small></button>
+            <button class="scenario" type="button" data-scenario="private-file"><span>越权阻断</span><small>读取受限文件</small></button>
+            <button class="scenario" type="button" data-scenario="database"><span>阈值审批</span><small>大批量数据库查询</small></button>
+            <button class="scenario" type="button" data-scenario="mail"><span>人工审批</span><small>模拟消息发送</small></button>
+          </div>
+
+          <form id="request-form">
+            <div class="form-grid two-columns">
+              <label><span>请求主体</span><input id="subject-id" name="subject_id" value="demo-viewer" required maxlength="128" /></label>
+              <label>
+                <span>角色</span>
+                <select id="role" name="role">
+                  <option value="viewer">Viewer · 查看者</option>
+                  <option value="analyst">Analyst · 分析员</option>
+                  <option value="operator">Operator · 操作员</option>
+                </select>
+              </label>
+            </div>
+            <label>
+              <span>工具</span>
+              <select id="tool-name" name="tool_name">
+                <option value="file.read">file.read · 文件读取</option>
+                <option value="db.select">db.select · 结构化数据库查询</option>
+                <option value="mail.send">mail.send · 模拟消息发送</option>
+              </select>
+            </label>
+            <div id="tool-fields" class="tool-fields"></div>
+            <div class="form-note"><span aria-hidden="true">i</span>当前页面使用虚构身份和本地数据，仅用于展示策略流程，不连接真实邮箱或生产数据库。</div>
+            <button class="primary-button" id="submit-request" type="submit"><span>提交到 AgentGate</span><span aria-hidden="true">→</span></button>
+          </form>
+        </article>
+
+        <article class="panel result-panel" aria-live="polite">
+          <div class="panel-heading">
+            <div><p class="section-kicker">POLICY RESULT</p><h2>策略判定</h2></div>
+            <button class="text-button" id="view-trace" type="button" disabled>查看审计链</button>
+          </div>
+          <div class="result-empty" id="result-empty">
+            <div class="radar" aria-hidden="true"><span></span><span></span><span></span></div>
+            <h3>等待请求</h3>
+            <p>选择一个场景并提交，系统会在这里解释允许、拒绝或转人工审批的原因。</p>
+          </div>
+          <div class="result-content hidden" id="result-content">
+            <div class="decision-header"><span class="decision-badge" id="decision-badge">—</span><span class="risk-badge" id="risk-badge">—</span></div>
+            <h3 id="decision-title">—</h3>
+            <p id="decision-reason">—</p>
+            <dl class="result-meta">
+              <div><dt>原因码</dt><dd id="reason-code">—</dd></div>
+              <div><dt>Trace ID</dt><dd id="trace-id">—</dd></div>
+              <div><dt>审批 ID</dt><dd id="approval-id">—</dd></div>
+            </dl>
+            <div class="execution-output hidden" id="execution-output">
+              <div class="output-heading"><strong>受控执行结果</strong><span id="execution-status">—</span></div>
+              <pre id="execution-json"></pre>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="lower-grid shell">
+        <article class="panel approvals-panel">
+          <div class="panel-heading"><div><p class="section-kicker">HUMAN IN THE LOOP</p><h2>待审批队列</h2></div><button class="icon-button" id="refresh-approvals" type="button" aria-label="刷新审批队列">↻</button></div>
+          <div id="approval-list" class="approval-list"><div class="list-empty">暂无待审批请求</div></div>
+        </article>
+        <article class="panel audit-panel">
+          <div class="panel-heading"><div><p class="section-kicker">AUDIT TRAIL</p><h2 id="audit-heading">最近审计事件</h2></div><button class="icon-button" id="refresh-audit" type="button" aria-label="刷新审计记录">↻</button></div>
+          <div id="audit-list" class="audit-list"><div class="list-empty">审计记录加载中</div></div>
+        </article>
+      </section>
+
+      <section class="principles shell" aria-labelledby="principles-title">
+        <div><p class="section-kicker">DESIGN PRINCIPLES</p><h2 id="principles-title">模型负责建议，系统负责授权</h2></div>
+        <div class="principle-list">
+          <article><span>01</span><strong>确定性策略</strong><p>相同的规范化请求得到可复现的策略结果，拒绝原因可以直接测试。</p></article>
+          <article><span>02</span><strong>最小权限</strong><p>不仅限制工具，还限制文件目录、数据库字段、行数和消息收件域。</p></article>
+          <article><span>03</span><strong>审批绑定</strong><p>批准只对当时的准确参数有效，篡改或重复使用凭证都会被阻断。</p></article>
+          <article><span>04</span><strong>安全失败</strong><p>关键审计无法写入时停止执行，不让系统在不可追溯状态下继续操作。</p></article>
+        </div>
+      </section>
+    </main>
+
+    <footer><div class="shell footer-inner"><span>AgentGate · 信息安全工程实践</span><span>仅使用本地虚构数据与模拟工具</span></div></footer>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>

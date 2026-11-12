@@ -7,6 +7,7 @@ from agentgate.approval import ApprovalService
 from agentgate.audit import AuditRepository
 from agentgate.executor import ToolRegistry
 from agentgate.gateway import AgentGateGateway
+from agentgate.idempotency import IdempotencyService
 from agentgate.normalizers import NormalizerRegistry
 from agentgate.policy import PolicyEngine
 from agentgate.policy.config import PolicyConfig
@@ -19,6 +20,7 @@ class AgentGateApplication:
     registry: ToolRegistry
     audit: AuditRepository
     approvals: ApprovalService
+    idempotency: IdempotencyService
 
 
 def build_application(
@@ -38,6 +40,7 @@ def build_application(
 
     audit = AuditRepository(state_database)
     approvals = ApprovalService(state_database)
+    idempotency = IdempotencyService(state_database)
     registry = build_default_registry(sandbox_root, business_database, outbox_path)
     policy = PolicyEngine(PolicyConfig.from_json(policy_path))
     gateway = AgentGateGateway(
@@ -46,11 +49,13 @@ def build_application(
         registry=registry,
         audit=audit,
         approvals=approvals,
+        idempotency=idempotency,
     )
     return AgentGateApplication(
         gateway=gateway,
         registry=registry,
         audit=audit,
         approvals=approvals,
+        idempotency=idempotency,
     )
 

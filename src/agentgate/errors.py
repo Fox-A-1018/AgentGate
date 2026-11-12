@@ -21,3 +21,7 @@ class ApprovalError(AgentGateError):
 class ToolExecutionError(AgentGateError):
     pass
 
+
+class IdempotencyError(AgentGateError):
+    pass
+

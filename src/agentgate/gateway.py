@@ -4,8 +4,9 @@ from typing import Any
 
 from agentgate.approval import ApprovalService
 from agentgate.audit import AuditRepository
-from agentgate.errors import ApprovalError, NormalizationError, ToolExecutionError
+from agentgate.errors import ApprovalError, IdempotencyError, NormalizationError, ToolExecutionError
 from agentgate.executor import ToolRegistry
+from agentgate.idempotency import IdempotencyService
 from agentgate.models import (
     ApprovalGrant,
     ApprovalRecord,
@@ -34,12 +35,14 @@ class AgentGateGateway:
         registry: ToolRegistry,
         audit: AuditRepository,
         approvals: ApprovalService,
+        idempotency: IdempotencyService,
     ) -> None:
         self.normalizers = normalizers
         self.policy = policy
         self.registry = registry
         self.audit = audit
         self.approvals = approvals
+        self.idempotency = idempotency
 
     def submit(self, request: ToolCallRequest) -> GatewayResponse:
         if not self._record(
@@ -82,13 +85,53 @@ class AgentGateGateway:
                 risk_level=RiskLevel.HIGH,
             )
 
+        try:
+            replay = self.idempotency.begin(call)
+        except IdempotencyError as exc:
+            response = GatewayResponse(
+                trace_id=call.trace_id,
+                request_id=call.request_id,
+                decision=Decision.DENY,
+                reason_code=exc.reason_code,
+                reason=exc.message,
+                risk_level=RiskLevel.HIGH,
+            )
+            self._record_idempotency_event(
+                AuditEventType.IDEMPOTENCY_REJECTED,
+                call,
+                response,
+            )
+            return response
+        except Exception:
+            response = GatewayResponse(
+                trace_id=call.trace_id,
+                request_id=call.request_id,
+                decision=Decision.DENY,
+                reason_code=ReasonCode.IDEMPOTENCY_UNAVAILABLE,
+                reason="request was blocked because the idempotency store is unavailable",
+                risk_level=RiskLevel.CRITICAL,
+            )
+            self._record_idempotency_event(
+                AuditEventType.IDEMPOTENCY_REJECTED,
+                call,
+                response,
+            )
+            return response
+        if replay is not None:
+            self._record_idempotency_event(
+                AuditEventType.IDEMPOTENCY_REPLAYED,
+                call,
+                replay,
+            )
+            return replay
+
         decision = self.policy.evaluate(call)
         if not self._record_policy(call, decision):
-            return self._audit_failure(request)
+            return self._remember(call, self._audit_failure(request))
 
         if decision.decision is Decision.DENY:
             self._record_denial(call, decision)
-            return self._response(call, decision)
+            return self._remember(call, self._response(call, decision))
 
         if decision.decision is Decision.REQUIRE_APPROVAL:
             approval = self.approvals.create(call)
@@ -101,10 +144,13 @@ class AgentGateGateway:
                     details={"expires_at": approval.expires_at.isoformat()},
                 )
             ):
-                return self._audit_failure(request)
-            return self._response(call, decision, approval_id=approval.approval_id)
+                return self._remember(call, self._audit_failure(request))
+            return self._remember(
+                call,
+                self._response(call, decision, approval_id=approval.approval_id),
+            )
 
-        return self._execute(call, decision)
+        return self._remember(call, self._execute(call, decision))
 
     def grant_approval(
         self,
@@ -331,6 +377,50 @@ class AgentGateGateway:
         except Exception:
             return False
         return True
+
+    def _remember(self, call: NormalizedToolCall, response: GatewayResponse) -> GatewayResponse:
+        try:
+            self.idempotency.complete(call, response)
+        except Exception:
+            self._record_idempotency_event(
+                AuditEventType.IDEMPOTENCY_REJECTED,
+                call,
+                GatewayResponse(
+                    trace_id=call.trace_id,
+                    request_id=call.request_id,
+                    decision=Decision.DENY,
+                    reason_code=ReasonCode.IDEMPOTENCY_UNAVAILABLE,
+                    reason="idempotency result could not be persisted",
+                    risk_level=RiskLevel.CRITICAL,
+                ),
+            )
+        return response
+
+    def _record_idempotency_event(
+        self,
+        event_type: AuditEventType,
+        call: NormalizedToolCall,
+        response: GatewayResponse,
+    ) -> None:
+        self._record(
+            AuditEvent(
+                event_type=event_type,
+                trace_id=call.trace_id,
+                request_id=call.request_id,
+                subject_id=call.subject_id,
+                role=call.role,
+                tool_name=call.tool_name,
+                decision=response.decision,
+                reason_code=response.reason_code,
+                risk_level=response.risk_level,
+                parameter_hash=call.request_hash,
+                policy_version=call.policy_version,
+                details={
+                    "idempotency_key_hash": self.idempotency.key_digest(call),
+                    "original_trace_id": response.trace_id,
+                },
+            )
+        )
 
     @staticmethod
     def _event(

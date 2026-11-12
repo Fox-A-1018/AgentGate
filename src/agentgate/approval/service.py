@@ -117,6 +117,21 @@ class ApprovalService:
             raise ApprovalError(ReasonCode.APPROVAL_NOT_FOUND, "approval request was not found")
         return self._row_to_record(row)
 
+    def list(self, status: ApprovalStatus | None = None, limit: int = 100) -> list[ApprovalRecord]:
+        safe_limit = max(1, min(limit, 500))
+        with self._connect() as connection:
+            if status is None:
+                rows = connection.execute(
+                    "SELECT * FROM approvals ORDER BY created_at DESC LIMIT ?",
+                    (safe_limit,),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    "SELECT * FROM approvals WHERE status = ? ORDER BY created_at DESC LIMIT ?",
+                    (status.value, safe_limit),
+                ).fetchall()
+        return [self._row_to_record(row) for row in rows]
+
     def approve(
         self,
         approval_id: str,
