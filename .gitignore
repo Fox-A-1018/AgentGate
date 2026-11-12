@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments and local settings
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# Runtime data and generated evidence
+*.db
+*.sqlite
+*.sqlite3
+data/runtime/
+outbox/
+artifacts/
+reports/generated/
+
+# Private/local course materials
+references/private/
+references/originals/
+*.docx
+*.pdf
+
+# Editors and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Temporary analysis files
+.tmp_analysis/
+tmp/
+
