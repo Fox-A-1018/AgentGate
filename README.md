@@ -27,6 +27,7 @@ GitHub Actions 会在 `main` 推送和 Pull Request 上使用 Python 3.11、3.12
 
 ## 项目资料
 
+- [新手使用指南](docs/USER_GUIDE.md)
 - [实施路线图](docs/PROJECT_PLAN.md)
 - [证据边界与待确认决策](docs/BASELINE_AND_DECISIONS.md)
 - [原始材料管理约定](references/README.md)
@@ -39,7 +40,23 @@ GitHub Actions 会在 `main` 推送和 Pull Request 上使用 Python 3.11、3.12
 
 本项目只连接本地模拟资源，不使用真实邮箱、生产数据库、云资源、真实个人信息或具有实际外部副作用的服务。模型接入不属于核心验收前置条件。
 
-## 本地运行
+## 最简单的本地运行方式
+
+Windows 第一次使用时双击：
+
+```text
+setup-agentgate.cmd
+```
+
+以后每次启动只需双击：
+
+```text
+start-agentgate.cmd
+```
+
+然后浏览器访问 `http://127.0.0.1:8010/`。详细操作和故障处理见[新手使用指南](docs/USER_GUIDE.md)。
+
+## 手动命令方式
 
 ```powershell
 py -3.11 -m venv .venv

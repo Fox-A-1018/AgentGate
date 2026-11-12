@@ -2,6 +2,10 @@
 
 ## 第一次运行
 
+不熟悉命令行的组员可以先双击 `setup-agentgate.cmd`，以后通过 `start-agentgate.cmd` 启动。完整说明见 `docs/USER_GUIDE.md`。
+
+手动命令方式：
+
 ```powershell
 py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev,api]"
