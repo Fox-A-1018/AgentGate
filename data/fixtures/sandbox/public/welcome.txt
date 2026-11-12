@@ -1,0 +1,2 @@
+AgentGate public fixture. This file is safe for the Viewer role.
+

@@ -1,0 +1,63 @@
+{
+  "version": "2026-11-12.1",
+  "mail_requires_approval": true,
+  "sensitive_patterns": [
+    "(?i)password\\s*[:=]",
+    "(?i)api[_ -]?key\\s*[:=]",
+    "(?i)secret\\s*[:=]",
+    "(?i)token\\s*[:=]",
+    "\\b\\d{17}[0-9Xx]\\b"
+  ],
+  "roles": {
+    "viewer": {
+      "tools": ["file.read", "db.select"],
+      "file_prefixes": ["public"],
+      "db_tables": {
+        "inventory": ["sku", "name", "stock"]
+      },
+      "db_direct_limit": 50,
+      "db_hard_limit": 100,
+      "mail_domains": []
+    },
+    "analyst": {
+      "tools": ["file.read", "db.select"],
+      "file_prefixes": ["public", "project"],
+      "db_tables": {
+        "inventory": ["sku", "name", "stock", "category"],
+        "orders": ["order_id", "sku", "quantity", "status"],
+        "users_public": ["user_id", "display_name", "department"]
+      },
+      "db_direct_limit": 100,
+      "db_hard_limit": 500,
+      "mail_domains": []
+    },
+    "operator": {
+      "tools": ["file.read", "db.select", "mail.send"],
+      "file_prefixes": ["public", "project"],
+      "db_tables": {
+        "inventory": ["sku", "name", "stock", "category"],
+        "orders": ["order_id", "sku", "quantity", "status"],
+        "users_public": ["user_id", "display_name", "department"]
+      },
+      "db_direct_limit": 100,
+      "db_hard_limit": 500,
+      "mail_domains": ["example.test"]
+    },
+    "approver": {
+      "tools": [],
+      "file_prefixes": [],
+      "db_tables": {},
+      "db_direct_limit": 0,
+      "db_hard_limit": 0,
+      "mail_domains": []
+    },
+    "auditor": {
+      "tools": [],
+      "file_prefixes": [],
+      "db_tables": {},
+      "db_direct_limit": 0,
+      "db_hard_limit": 0,
+      "mail_domains": []
+    }
+  }
+}

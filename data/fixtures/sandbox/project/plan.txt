@@ -1,0 +1,2 @@
+AgentGate project fixture. This file is available to Analyst and Operator roles.
+
