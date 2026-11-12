@@ -39,6 +39,7 @@ def test_dashboard_is_packaged_and_root_route_returns_it(app):
 
     dashboard_path = Path(response.path)
     assert dashboard_path.is_file()
+    assert response.headers["cache-control"] == "no-store, no-cache, must-revalidate, max-age=0"
     assert "AgentGate · 安全控制台" in dashboard_path.read_text(encoding="utf-8")
     assert (dashboard_path.parent / "styles.css").is_file()
     assert (dashboard_path.parent / "app.js").is_file()

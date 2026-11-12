@@ -29,7 +29,7 @@
 .\.venv\Scripts\python.exe -m pytest --cov=agentgate --cov-report=term-missing
 ```
 
-结果：80 个测试全部通过，总体语句覆盖率 93%。其中 52 条来自版本化 JSON 安全用例集。
+结果：80 个测试全部通过，总体语句覆盖率 92%。其中 52 条来自版本化 JSON 安全用例集。
 
 已覆盖的关键场景：
 

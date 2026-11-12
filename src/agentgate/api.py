@@ -41,9 +41,21 @@ def create_api(application: AgentGateApplication):
     )
     web_root = Path(__file__).resolve().parent / "web"
 
+    @api.middleware("http")
+    async def dashboard_cache_control(request, call_next):
+        response = await call_next(request)
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
+
     @api.get("/", include_in_schema=False)
     async def dashboard() -> FileResponse:
-        return FileResponse(web_root / "index.html")
+        return FileResponse(
+            web_root / "index.html",
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+        )
 
     @api.get("/health")
     async def health() -> dict[str, str]:
